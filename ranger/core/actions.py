@@ -41,11 +41,17 @@ class Actions(FileManagerAware, SettingsAware):
     # --------------------------
 
     def exit(self):
-        """Exit the program"""
+        """:exit
+
+        Exit the program.
+        """
         raise SystemExit()
 
     def reset(self):
-        """Reset the filemanager, clearing the directory buffer"""
+        """:reset
+
+        Reset the filemanager, clearing the directory buffer.
+        """
         old_path = self.thisdir.path
         self.previews = {}
         self.garbage_collect(-1)
@@ -55,6 +61,10 @@ class Actions(FileManagerAware, SettingsAware):
             self.metadata.reset()
 
     def change_mode(self, mode):
+        """:change_mode <mode>
+
+        Change mode to "visual" (selection) or "normal" mode.
+        """
         if mode == self.mode:
             return
         if mode == 'visual':
@@ -103,6 +113,10 @@ class Actions(FileManagerAware, SettingsAware):
         raise ValueError("Invalid value `%s' for option `%s'!" % (name, value))
 
     def toggle_visual_mode(self, reverse=False, narg=None):
+        """:toggle_visual_mode
+
+        Toggle the visual mode (see :change_mode).
+        """
         if self.mode == 'normal':
             self._visual_reverse = reverse
             if narg != None:
@@ -112,14 +126,23 @@ class Actions(FileManagerAware, SettingsAware):
             self.change_mode('normal')
 
     def reload_cwd(self):
+        """:reload_cwd
+
+        Reload the current working directory.
+        """
         try:
             cwd = self.thisdir
         except:
             pass
-        cwd.unload()
-        cwd.load_content()
+        else:
+            cwd.unload()
+            cwd.load_content()
 
     def notify(self, text, duration=4, bad=False):
+        """:notify <text>
+
+        Display the text in the statusbar.
+        """
         if isinstance(text, Exception):
             if ranger.arg.debug:
                 raise
@@ -135,6 +158,10 @@ class Actions(FileManagerAware, SettingsAware):
             print(text)
 
     def abort(self):
+        """:abort
+
+        Empty the first queued action.
+        """
         try:
             item = self.loader.queue[0]
         except:
@@ -150,16 +177,25 @@ class Actions(FileManagerAware, SettingsAware):
         self.ui.redraw_main_column()
 
     def redraw_window(self):
-        """Redraw the window"""
+        """:redraw
+
+        Redraw the window.
+        """
         self.ui.redraw_window()
 
     def open_console(self, string='', prompt=None, position=None):
-        """Open the console"""
+        """:open_console [string]
+
+        Open the console.
+        """
         self.change_mode('normal')
         self.ui.open_console(string, prompt=prompt, position=position)
 
     def execute_console(self, string='', wildcards=[], quantifier=None):
-        """Execute a command for the console"""
+        """:execute_console [string]
+
+        Execute a command for the console
+        """
         command_name = string.lstrip().split()[0]
         cmd_class = self.commands.get_command(command_name, abbrev=False)
         if cmd_class is None:
@@ -291,6 +327,10 @@ class Actions(FileManagerAware, SettingsAware):
         return macros
 
     def source(self, filename):
+        """:source <filename>
+
+        Load a config file.
+        """
         filename = os.path.expanduser(filename)
         for line in open(filename, 'r'):
             line = line.lstrip().rstrip("\r\n")
@@ -538,12 +578,18 @@ class Actions(FileManagerAware, SettingsAware):
         self.execute_file(file, label='editor')
 
     def toggle_option(self, string):
-        """Toggle a boolean option named <string>"""
+        """:toggle_option <string>
+
+        Toggle a boolean option named <string>.
+        """
         if isinstance(self.settings[string], bool):
             self.settings[string] ^= True
 
     def set_option(self, optname, value):
-        """Set the value of an option named <optname>"""
+        """:set_option <optname>
+
+        Set the value of an option named <optname>.
+        """
         self.settings[optname] = value
 
     def sort(self, func=None, reverse=None):
@@ -680,6 +726,10 @@ class Actions(FileManagerAware, SettingsAware):
     # file is important to you in any context.
 
     def tag_toggle(self, paths=None, value=None, movedown=None, tag=None):
+        """:tag_toggle <character>
+
+        Toggle a tag <character>.
+        """
         if not self.tags:
             return
         if paths is None:
@@ -799,14 +849,11 @@ class Actions(FileManagerAware, SettingsAware):
             return
 
         pager = self.ui.open_pager()
-        if self.settings.preview_images and self.thisfile.image:
-            pager.set_image(self.thisfile.realpath)
+        f = self.thisfile.get_preview_source(pager.wid, pager.hei)
+        if self.thisfile.is_image_preview():
+            pager.set_image(f)
         else:
-            f = self.thisfile.get_preview_source(pager.wid, pager.hei)
-            if self.thisfile.is_image_preview():
-                pager.set_image(f)
-            else:
-                pager.set_source(f)
+            pager.set_source(f)
 
     # --------------------------
     # -- Previews
@@ -833,10 +880,6 @@ class Actions(FileManagerAware, SettingsAware):
         path = file.realpath
 
         if not path or not os.path.exists(path):
-            return None
-
-        if self.settings.preview_images and file.image:
-            pager.set_image(path)
             return None
 
         if self.settings.preview_script and self.settings.use_preview_script:
@@ -874,6 +917,13 @@ class Actions(FileManagerAware, SettingsAware):
 
                 data['loading'] = True
 
+                if 'directimagepreview' in data:
+                    data['foundpreview'] = True
+                    data['imagepreview'] = True
+                    pager.set_image(path)
+                    data['loading'] = False
+                    return path
+
                 cacheimg = os.path.join(ranger.CACHEDIR, self.sha1_encode(path))
                 if (os.path.isfile(cacheimg) and os.path.getmtime(cacheimg) > os.path.getmtime(path)):
                     data['foundpreview'] = True
@@ -883,7 +933,8 @@ class Actions(FileManagerAware, SettingsAware):
                     return cacheimg
 
                 loadable = CommandLoader(args=[self.settings.preview_script,
-                    path, str(width), str(height), cacheimg], read=True,
+                    path, str(width), str(height), cacheimg,
+                    str(self.settings.preview_images)], read=True,
                     silent=True, descr="Getting preview of %s" % path)
                 def on_after(signal):
                     exit = signal.process.poll()
@@ -899,6 +950,8 @@ class Actions(FileManagerAware, SettingsAware):
                         data[(-1, -1)] = content
                     elif exit == 6:
                         data['imagepreview'] = True
+                    elif exit == 7:
+                        data['directimagepreview'] = True
                     elif exit == 1:
                         data[(-1, -1)] = None
                         data['foundpreview'] = False
@@ -922,6 +975,9 @@ class Actions(FileManagerAware, SettingsAware):
                         if 'imagepreview' in data:
                             pager.set_image(cacheimg)
                             return cacheimg
+                        elif 'directimagepreview' in data:
+                            pager.set_image(path)
+                            return path
                         else:
                             pager.set_source(self.thisfile.get_preview_source(
                                 pager.wid, pager.hei))
@@ -1107,8 +1163,10 @@ class Actions(FileManagerAware, SettingsAware):
         for cmd_name in sorted(self.commands.commands):
             cmd = self.commands.commands[cmd_name]
             if hasattr(cmd, '__doc__') and cmd.__doc__:
-                write(cleandoc(cmd.__doc__))
-                write("\n\n" + "-" * 60 + "\n")
+                doc = cleandoc(cmd.__doc__)
+                if doc[0] == ':':
+                    write(doc)
+                    write("\n\n" + "-" * 60 + "\n")
             else:
                 undocumented.append(cmd)
 
@@ -1138,12 +1196,20 @@ class Actions(FileManagerAware, SettingsAware):
     # --------------------------
 
     def uncut(self):
+        """:uncut
+
+        Empty the copy buffer.
+        """
         self.copy_buffer = set()
         self.do_cut = False
         self.ui.browser.main_column.request_redraw()
 
     def copy(self, mode='set', narg=None, dirarg=None):
-        """Copy the selected items.  Modes are: 'set', 'add', 'remove'."""
+        """:copy [mode=set]
+
+        Copy the selected items.
+        Modes are: 'set', 'add', 'remove'.
+        """
         assert mode in ('set', 'add', 'remove')
         cwd = self.thisdir
         if not narg and not dirarg:
@@ -1170,6 +1236,11 @@ class Actions(FileManagerAware, SettingsAware):
         self.ui.browser.main_column.request_redraw()
 
     def cut(self, mode='set', narg=None, dirarg=None):
+        """:cut [mode=set]
+
+        Cut the selected items.
+        Modes are: 'set, 'add, 'remove.
+        """
         self.copy(mode=mode, narg=narg, dirarg=dirarg)
         self.do_cut = True
         self.ui.browser.main_column.request_redraw()
@@ -1218,7 +1289,10 @@ class Actions(FileManagerAware, SettingsAware):
                     next_available_filename(target_path))
 
     def paste(self, overwrite=False, append=False):
-        """Paste the selected items into the current directory"""
+        """:paste
+
+        Paste the selected items into the current directory.
+        """
         loadable = CopyLoader(self.copy_buffer, self.do_cut, overwrite)
         self.loader.add(loadable, append=append)
         self.do_cut = False
